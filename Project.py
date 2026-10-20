@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 
 
 
-# 1.- IMPORT AND FIXES/FILTERS
+# 1.1- IMPORT AND FIXES/FILTERS
 # --------------------------------------------------------------------------
 
 dataset_path = "procrastination_survey_dataset.csv"
@@ -69,7 +69,7 @@ extra_field_count = (overlong_widths[0] - expected_column_count
 print (f"\nExtra fields per affected row: {extra_field_count}")
 
 
-# Derive the position of planning_style from the actual header.
+# Derive the position of planning_style from the actual header
 if "planning_style" not in header:
     raise ValueError("The expected planning_style column is missing.")
 
@@ -96,7 +96,7 @@ def is_numeric_value(value):
     return pd.notna(converted_value)
 
 
-# Inspect the planning_style position in correctly aligned rows.
+# Inspect the planning_style position in correctly aligned rows
 correct_style_text_count = sum(
     isinstance(row[planning_style_index], str)
     and bool(row[planning_style_index].strip())
@@ -110,7 +110,7 @@ print(
     correct_style_text_count
 )
 
-# Check whether the extra field appears immediately before planning_style.
+# Check whether the extra field appears immediately before planning_style
 if extra_field_count > 0:
 
     numeric_at_expected_position = sum(
@@ -144,7 +144,7 @@ if extra_field_count > 0:
         shifted_style_text_count
     )
 
-    # Correct only if the observed structure supports this decision.
+    # Correct only if the observed structure supports this decision
     repair_pattern_verified = (
         correct_style_text_count == len(correctly_aligned_rows)
         and numeric_at_expected_position == len(overlong_rows)
@@ -164,7 +164,7 @@ else:
     print("\nNo overlong data rows require correction.")
 
 
-# which participant rows are corrected.
+# which participant rows are corrected
 repaired_participant_ids = []
 
 
@@ -196,7 +196,7 @@ def repair_extra_field(row):
                 row[participant_index]
             )
 
-            # Remove the extra field using the derived index.
+            # Remove the extra field using the derived index
             return (
                 row[:planning_style_index]
                 + row[planning_style_index + extra_field_count:]
@@ -207,7 +207,7 @@ def repair_extra_field(row):
     )
 
 
-# Let Pandas handle the data types after the structural check.
+# Let Pandas handle the data types after the structural check
 bad_line_handler = (
     repair_extra_field
     if extra_field_count > 0
@@ -215,7 +215,7 @@ bad_line_handler = (
 )
 
 
-# 2.- EXPLORATION
+# 1.2- EXPLORATION
 # --------------------------------------------------------------------------
 
 df = pd.read_csv(
@@ -229,18 +229,18 @@ print("\nLoaded dataset shape:", df.shape)
 print("Corrected rows:", len(repaired_participant_ids))
 
 
-# Nº of rows and columns.
+# Nº of rows and columns
 print("Rows:", df.shape[0])
 print("Columns:", df.shape[1])
 
-# Column names and data types.
+# Column names and data types
 print("\nColumn names:")
 print(df.columns.tolist())
 
 print("\nData types and non-null counts:")
 df.info()
 
-# Missing values per column.
+# Missing values per column
 missing_values = df.isnull().sum()
 missing_columns = missing_values[missing_values > 0]
 
@@ -258,10 +258,10 @@ print (df.describe(include=[np.number]).T.round(1))
 
 
 
-# 3.- CATEGORIES AND INCONSISTENCIES
+# 1.3- CATEGORIES AND INCONSISTENCIES
 # --------------------------------------------------------------------------
 
-# Identify textual columns from their actual data types.
+# Identify textual columns from their actual data types
 text_columns = df.select_dtypes(
     include=["object", "string"]
 ).columns.tolist()
@@ -283,10 +283,10 @@ for column in text_columns:
     print("\n"*3)
 
 
-# 4.- INVALID & UNUSUAL VALUES
+# 1.4- INVALID & UNUSUAL VALUES
 # --------------------------------------------------------------------------
 
-# checking for values surpassing 24 hours
+# Checking for values surpassing 24 hours
 hours = 24
 
 per_day_features = [
@@ -328,7 +328,7 @@ for column in per_day_features:
     )
 
 
-# checking inconsistencies between social-media time and total screen time.
+# Checking inconsistencies between social-media time and total screen time
 if {
     "daily_social_media_hours",
     "daily_screen_time_hours"
@@ -350,7 +350,7 @@ if {
     )
 
 
-# Check whether work, study and commuting fit within a day.
+# Check whether work, study and commuting fit within a day
 time_columns = [
     "work_hours_per_day",
     "study_hours_per_day",
@@ -368,7 +368,7 @@ if set(time_columns).issubset(df.columns):
     )
 
 
-# Inspect the observed scale of questionnaire items.
+# Inspect the observed scale of questionnaire items
 procrastination_item_columns = [
     column
     for column in df.columns
@@ -404,8 +404,8 @@ if procrastination_item_columns:
         outside_item_range
     )
 
-    # Compare the target with the average of the P questionnaire items.
-    # This is diagnostic only; these items will not be predictors.
+    # Compare the target with the average of the P questionnaire items
+    # This is diagnostic only; these items will not be predictors
     item_average = p_items.mean(axis=1)
 
     print(
@@ -417,3 +417,125 @@ if procrastination_item_columns:
         "Mean absolute difference between target and P-item average:",
         round((target_values - item_average).abs().mean(), 4)
     )
+
+
+
+# 2.1- DATA PREPARATION
+
+print ("DATA PREPARATION", "-"*30)
+
+# Predictors connected to screen time, sleep and lifestyle
+feature_columns = [
+    # Screen time
+    "daily_screen_time_hours",
+    "daily_social_media_hours",
+
+    # Sleep
+    "average_sleep_hours",
+    "sleep_quality",
+
+    # Lifestyle and daily routine
+    "physical_activity_frequency",
+    "work_hours_per_day",
+    "study_hours_per_day",
+    "commute_hours_per_day",
+
+    # Digital habits
+    "social_media_check_frequency",
+    "social_media_during_work_or_study",
+    "social_media_as_task_avoidance",
+    "notifications_enabled",
+
+    # Planning and wellbeing
+    "planning_style",
+    "stress_rating",
+    "mood_rating",
+    "energy_rating",
+    "concentration_difficulty",
+    "feeling_overwhelmed_frequency",
+    "work_life_balance",
+    "perceived_control"
+]
+
+
+print (f"Selected predictors: {len(feature_columns)}")
+print (f"Target: {target_column}")
+
+print (f"\nSelected feature names: {feature_columns}")
+
+
+# Explicitly identify columns excluded from modelling
+excluded_columns = sorted(
+    set(df.columns)
+    - set(feature_columns)
+    - {target_column}
+)
+
+print("\nColumns excluded from modelling:")
+print(excluded_columns)
+
+# Identify direct questionnaire items and derived score columns
+direct_questionnaire_items = [
+    column
+    for column in df.columns
+    if (
+        column.startswith("P")
+        or column.startswith("S")
+    )
+    and column[1:].isdigit()
+]
+
+derived_score_columns = [
+    column
+    for column in df.columns
+    if column.endswith("_score")
+    and column != target_column
+]
+
+print("\nDirect questionnaire items excluded:")
+print(direct_questionnaire_items)
+
+print("\nOther derived scores excluded:")
+print(derived_score_columns)
+
+
+# Create the modelling dataset
+model_data = df[
+    feature_columns + [target_column]
+].copy()
+
+# Check missing values only in the columns required for modelling
+missing_model_values = model_data.isnull().sum()
+
+print("\nMissing values in selected columns:")
+print(
+    missing_model_values[missing_model_values > 0]
+    if missing_model_values.any()
+    else "None"
+)
+
+# Remove incomplete modelling records, if any
+rows_before_cleaning = len(model_data)
+
+model_data = model_data.dropna(
+    subset=feature_columns + [target_column]
+)
+
+rows_removed = rows_before_cleaning - len(model_data)
+
+print("\nRows before cleaning:", rows_before_cleaning)
+print("Rows removed:", rows_removed)
+print("Rows remaining:", len(model_data))
+
+# Separate predictors and target
+X_raw = model_data[feature_columns].copy()
+
+y = pd.to_numeric(
+    model_data[target_column],
+    errors="raise"
+).astype(float)
+
+print("\nPredictor matrix shape:", X_raw.shape)
+print("Target shape:", y.shape)
+
+# 7 
