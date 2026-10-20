@@ -395,27 +395,13 @@ if procrastination_item_columns:
         | (target_values > item_maximum)
     ).sum()
 
-    print("\nObserved range of the P questionnaire items:")
+    print("\nObserved range of the P-Set items:")
     print (f"Minimum: {item_minimum}")
     print (f"Maximum: {item_maximum}")
 
     print(
         "Target scores outside the observed item range:",
         outside_item_range
-    )
-
-    # Compare the target with the average of the P questionnaire items
-    # This is diagnostic only; these items will not be predictors
-    item_average = p_items.mean(axis=1)
-
-    print(
-        "Correlation between the target and P-item average:",
-        round(item_average.corr(target_values), 4)
-    )
-
-    print(
-        "Mean absolute difference between target and P-item average:",
-        round((target_values - item_average).abs().mean(), 4)
     )
 
 
@@ -499,7 +485,6 @@ print("\nOther derived scores excluded:")
 print(derived_score_columns)
 
 
-# Create the modelling dataset
 model_data = df[
     feature_columns + [target_column]
 ].copy()
@@ -528,14 +513,113 @@ print("Rows removed:", rows_removed)
 print("Rows remaining:", len(model_data))
 
 # Separate predictors and target
-X_raw = model_data[feature_columns].copy()
+x_raw = model_data[feature_columns].copy()
 
 y = pd.to_numeric(
     model_data[target_column],
     errors="raise"
 ).astype(float)
 
-print("\nPredictor matrix shape:", X_raw.shape)
+print("\nPredictor matrix shape:", x_raw.shape)
 print("Target shape:", y.shape)
 
-# 7 
+
+
+# 2.2- TEST & TRAINING
+
+
+# Proportion 80-20
+test_perc = 0.20
+
+
+indices = np.random.permutation(len(x_raw))
+test_size = int(np.ceil(test_perc * len(x_raw)))
+
+if test_size <= 0 or test_size >= len(x_raw):
+    raise ValueError("The train/test split is not valid.")
+
+test_indices = indices[:test_size]
+train_indices = indices[test_size:]
+
+
+x_train_raw = x_raw.iloc[train_indices].copy()
+x_test_raw = x_raw.iloc[test_indices].copy()
+
+# Separate the target variable.
+y_train = y.iloc[train_indices].to_numpy(dtype=float)
+y_test = y.iloc[test_indices].to_numpy(dtype=float)
+
+# Display the resulting dataset sizes.
+print(f"\n\nTotal observations: {len(x_raw)}")
+print(f"Training observations: {len(x_train_raw)}")
+print(f"Testing observations: {len(x_test_raw)}\n\n")
+
+
+
+print (f"Training proportion: {round(len(x_train_raw) / len(x_raw), 4)}")
+print (f"Testing proportion: {round(len(x_test_raw) / len(x_raw), 4)}\n\n")
+
+
+# 2.3- CATEGORIZING NUMERIVAL VALUES
+
+categorical_columns = x_train_raw.select_dtypes(include = ["object", "string", "category"]).columns.tolist()
+print (f"Categorical predictors: {categorical_columns}\n\n")
+
+# categories --> binary columns
+x_train_encoded = pd.get_dummies(
+    x_test_raw,
+    columns = categorical_columns,
+    drop_first = True,
+    dtype = float
+)
+
+x_test_encoded = pd.get_dummies(
+    x_test_raw,
+    columns = categorical_columns,
+    drop_first = True,
+    dtype = float
+)
+
+# align test col. & training col.
+x_test_encoded = x_test_encoded.reindex(
+    columns = x_train_encoded.columns,
+    fill_value = 0
+)
+
+
+print (f"Encoded training shape: {x_train_encoded.shape}")
+print (f"Encoded testing shape: {x_test_encoded.shape}")
+print (f"\n Enconded feature names: {x_train_encoded.columns.tolist()}\n\n")
+
+
+
+# 2.4 - DATA PREPARATION FOR LR
+
+x_train_lr = x_train_encoded.copy()
+x_test_lr = x_test_encoded.copy()
+
+numerical_columns = x_train_raw.select_dtypes(
+    include = np.number
+).columns.tolist()
+
+# mean & std from trainig data only
+train_means = x_train_lr[numerical_columns].mean()
+train_stds = x_train_lr[numerical_columns].std(ddof=0)
+
+# checking for columns with zero-variance
+zero_variance_columns = train_stds[
+    train_stds == 0
+].index.tolist()
+
+print (f"Numerical columns to scale: {numerical_columns}")
+print (f"Zero-variance columns: {zero_variance_columns}")
+
+
+# if std =0, std --> =1
+train_stds = train_stds.replace(0,1)
+
+x_train_lr[numerical_columns] = (
+    x_test_lr[numerical_columns] - train_means
+) / train_stds
+
+print(f"\nScaled training data preview: {x_train_lr.head()}")
