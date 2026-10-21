@@ -2,7 +2,7 @@ import csv
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-
+from sklearn.ensemble import RandomForestRegressor
 
 
 # 1.1- IMPORT AND FIXES/FILTERS
@@ -742,12 +742,41 @@ final_training_mse_lr = np.mean(
     (y_train_pred_lr - y_train) ** 2
 )
 
-print("\nLinear Regression training completed.")
+print("\n\nLinear Regression", "-"*10)
 print (f"Number of coefficients: {len(weights)}")
 print (f"Final training MSE: {final_training_mse_lr}")
 
 print("\nFirst test predictions:")
 print(y_pred_lr[:10])
+
+print("\nCorresponding actual values:")
+print(y_test[:10])
+
+
+# 3.2 - Random Forest Regressor
+# --------------------------------------------------------------------------
+
+
+rf_model = RandomForestRegressor(n_estimators=100)
+
+# train.
+rf_model.fit(
+    x_train_encoded,
+    y_train
+)
+
+# preds
+y_train_pred_rf = rf_model.predict(
+    x_train_encoded
+)
+y_pred_rf = rf_model.predict(
+    x_test_encoded
+)
+
+print("\n\nRandom Forest", "-"*10)
+
+print("\nFirst test predictions:")
+print(y_pred_rf[:10])
 
 print("\nCorresponding actual values:")
 print(y_test[:10])
