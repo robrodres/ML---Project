@@ -407,6 +407,7 @@ if procrastination_item_columns:
 
 
 # 2.1- DATA PREPARATION
+# --------------------------------------------------------------------------
 
 print ("DATA PREPARATION", "-"*30)
 
@@ -526,6 +527,7 @@ print("Target shape:", y.shape)
 
 
 # 2.2- TEST & TRAINING
+# --------------------------------------------------------------------------
 
 
 # Proportion 80-20
@@ -545,11 +547,11 @@ train_indices = indices[test_size:]
 x_train_raw = x_raw.iloc[train_indices].copy()
 x_test_raw = x_raw.iloc[test_indices].copy()
 
-# Separate the target variable.
+# Separate the target variable
 y_train = y.iloc[train_indices].to_numpy(dtype=float)
 y_test = y.iloc[test_indices].to_numpy(dtype=float)
 
-# Display the resulting dataset sizes.
+# Display the resulting dataset sizes
 print(f"\n\nTotal observations: {len(x_raw)}")
 print(f"Training observations: {len(x_train_raw)}")
 print(f"Testing observations: {len(x_test_raw)}\n\n")
@@ -561,13 +563,14 @@ print (f"Testing proportion: {round(len(x_test_raw) / len(x_raw), 4)}\n\n")
 
 
 # 2.3- CATEGORIZING NUMERIVAL VALUES
+# --------------------------------------------------------------------------
 
 categorical_columns = x_train_raw.select_dtypes(include = ["object", "string", "category"]).columns.tolist()
 print (f"Categorical predictors: {categorical_columns}\n\n")
 
 # categories --> binary columns
 x_train_encoded = pd.get_dummies(
-    x_test_raw,
+    x_train_raw,
     columns = categorical_columns,
     drop_first = True,
     dtype = float
@@ -594,6 +597,7 @@ print (f"\n Enconded feature names: {x_train_encoded.columns.tolist()}\n\n")
 
 
 # 2.4 - DATA PREPARATION FOR LR
+# --------------------------------------------------------------------------
 
 x_train_lr = x_train_encoded.copy()
 x_test_lr = x_test_encoded.copy()
@@ -602,11 +606,10 @@ numerical_columns = x_train_raw.select_dtypes(
     include = np.number
 ).columns.tolist()
 
-# mean & std from trainig data only
 train_means = x_train_lr[numerical_columns].mean()
 train_stds = x_train_lr[numerical_columns].std(ddof=0)
 
-# checking for columns with zero-variance
+# checking zero-variance
 zero_variance_columns = train_stds[
     train_stds == 0
 ].index.tolist()
@@ -618,8 +621,133 @@ print (f"Zero-variance columns: {zero_variance_columns}")
 # if std =0, std --> =1
 train_stds = train_stds.replace(0,1)
 
+
 x_train_lr[numerical_columns] = (
+    x_train_lr[numerical_columns] - train_means
+) / train_stds
+
+x_test_lr[numerical_columns] = (
     x_test_lr[numerical_columns] - train_means
 ) / train_stds
 
+
+
 print(f"\nScaled training data preview: {x_train_lr.head()}")
+
+
+
+
+# 3- MODELS
+# --------------------------------------------------------------------------
+
+
+
+# 3.1- Linear Regression
+# --------------------------------------------------------------------------
+
+
+
+
+# -> numpy arrays
+x_train_array = x_train_lr.to_numpy(dtype=float)
+x_test_array = x_test_lr.to_numpy(dtype=float)
+
+weights = np.zeros(x_train_array.shape[1] + 1)
+
+
+def calc_preds(x_data, coefficients):
+
+    predictions = np.ones(x_data.shape[0]) * coefficients[0]
+
+    for feature_index in range(x_data.shape[1]):
+
+        predictions += (
+            x_data[:, feature_index]
+            * coefficients[feature_index + 1]
+        )
+
+    return predictions
+
+
+def calc_grads(x_data, errors):
+
+    gradients = np.zeros(x_data.shape[1] + 1)
+
+    gradients[0] = (
+        2 / len(errors)
+    ) * np.sum(errors)
+
+    for feature_index in range(x_data.shape[1]):
+
+        gradients[feature_index + 1] = (
+            2 / len(errors)
+        ) * np.sum(
+            x_data[:, feature_index] * errors
+        )
+
+    return gradients
+
+
+# training params
+learning_rate = 0.01
+iterations = 10000
+
+print (f"Learning rate: {learning_rate}")
+print (f"Number of iterations: {iterations}")
+
+
+
+initial_predictions = calc_preds(
+    x_train_array,
+    weights
+)
+
+initial_mse = np.mean(
+    (initial_predictions - y_train) ** 2
+)
+
+print (f"\nInitial training MSE: {initial_mse}")
+
+
+for iteration in range(iterations):
+
+    predictions = calc_preds(
+        x_train_array,
+        weights
+    )
+
+    errors = predictions - y_train
+
+    gradients = calc_grads(
+        x_train_array,
+        errors
+    )
+
+    weights -= learning_rate * gradients
+
+
+
+y_train_pred_lr = calc_preds(
+    x_train_array,
+    weights
+)
+
+y_pred_lr = calc_preds(
+    x_test_array,
+    weights
+)
+
+# FINAL training error
+final_training_mse_lr = np.mean(
+    (y_train_pred_lr - y_train) ** 2
+)
+
+print("\nLinear Regression training completed.")
+print (f"Number of coefficients: {len(weights)}")
+print (f"Final training MSE: {final_training_mse_lr}")
+
+print("\nFirst test predictions:")
+print(y_pred_lr[:10])
+
+print("\nCorresponding actual values:")
+print(y_test[:10])
