@@ -726,12 +726,13 @@ for iteration in range(iterations):
     weights -= learning_rate * gradients
 
 
-
+# train
 y_train_pred_lr = calc_preds(
     x_train_array,
     weights
 )
 
+# pred
 y_pred_lr = calc_preds(
     x_test_array,
     weights
@@ -780,3 +781,188 @@ print(y_pred_rf[:10])
 
 print("\nCorresponding actual values:")
 print(y_test[:10])
+
+
+# 4 - Model evaluation
+# --------------------------------------------------------------------------
+
+
+def calc_metrics(y_true, y_pred):
+
+    errors = y_true - y_pred
+
+    # mae
+    mae = np.mean(np.abs(errors))
+
+    # mse
+    mse = np.mean(errors ** 2)
+
+    # rmse
+    rmse = np.sqrt(mse)
+
+    # R2
+    total_error = np.sum(
+        (y_true - np.mean(y_true)) ** 2
+    )
+
+    prediction_error = np.sum(errors ** 2)
+
+    if total_error == 0:
+        r2 = np.nan
+    else:
+        r2 = 1 - prediction_error / total_error
+
+    return [mae, mse, rmse, r2]
+
+
+# train
+lr_train_metrics = calc_metrics(
+    y_train,
+    y_train_pred_lr
+)
+rf_train_metrics = calc_metrics(
+    y_train,
+    y_train_pred_rf
+)
+
+# twst
+lr_test_metrics = calc_metrics(
+    y_test,
+    y_pred_lr
+)
+rf_test_metrics = calc_metrics(
+    y_test,
+    y_pred_rf
+)
+
+
+# results
+metric_names = ["MAE", "MSE", "RMSE", "R2"]
+
+train_results = pd.DataFrame(
+    [
+        lr_train_metrics,
+        rf_train_metrics
+    ],
+    columns=metric_names,
+    index=[
+        "Linear Regression",
+        "Random Forest"
+    ]
+)
+
+print("TRAINING RESULTS")
+print(train_results.round(4))
+
+
+# Display
+test_results = pd.DataFrame(
+    [
+        lr_test_metrics,
+        rf_test_metrics
+    ],
+    columns=metric_names,
+    index=[
+        "Linear Regression",
+        "Random Forest"
+    ]
+)
+
+print("\nTEST RESULTS")
+print(test_results.round(4))
+
+
+# Compare both models using test RMSE.
+if lr_test_metrics[2] < rf_test_metrics[2]:
+    print("\nLower test RMSE: Linear Regression")
+elif rf_test_metrics[2] < lr_test_metrics[2]:
+    print("\nLower test RMSE: Random Forest")
+else:
+    print("\nBoth models have the same test RMSE.")
+
+
+
+# 5 - Actual values vs predictions
+# --------------------------------------------------------------------------
+
+minimum = min(
+    y_test.min(),
+    y_pred_lr.min(),
+    y_pred_rf.min()
+)
+
+maximum = max(
+    y_test.max(),
+    y_pred_lr.max(),
+    y_pred_rf.max()
+)
+
+plt.figure(figsize=(8, 6))
+
+plt.scatter(
+    y_test,
+    y_pred_lr,
+    label="Linear Regression"
+)
+
+plt.scatter(
+    y_test,
+    y_pred_rf,
+    label="Random Forest",
+    marker="x"
+)
+
+# Reference line for perfect predictions.
+plt.plot(
+    [minimum, maximum],
+    [minimum, maximum],
+    linestyle="--",
+    label="Perfect predictions"
+)
+
+plt.title("Actual vs Predicted Procrastination Scores")
+plt.xlabel("Actual Procrastination Score")
+plt.ylabel("Predicted Procrastination Score")
+
+plt.legend()
+plt.tight_layout()
+plt.show()
+
+
+
+
+# 6 - Random Forest Feature Importance
+# --------------------------------------------------------------------------
+
+feature_importance = pd.Series(
+    rf_model.feature_importances_,
+    index=x_train_encoded.columns
+)
+
+# Sort features by importance.
+feature_importance = feature_importance.sort_values()
+
+# Display the ten most important features.
+top_features = feature_importance.tail(10)
+
+print("Top 10 features:")
+print(top_features.sort_values(ascending=False).round(4))
+
+# Convert the feature importance values to a numerical array.
+feature_values = top_features.to_numpy(dtype=float)
+feature_names = top_features.index.tolist()
+
+# Plot feature importance.
+plt.figure(figsize=(9, 6))
+
+plt.barh(
+    feature_names,
+    feature_values
+)
+
+plt.title("Random Forest Feature Importance")
+plt.xlabel("Importance")
+plt.ylabel("Feature")
+
+plt.tight_layout()
+plt.show()
