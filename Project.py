@@ -565,95 +565,77 @@ print (f"Testing proportion: {round(len(x_test_raw) / len(x_raw), 4)}\n\n")
 # 2.3- CATEGORIZING NUMERIVAL VALUES
 # --------------------------------------------------------------------------
 
-categorical_columns = x_train_raw.select_dtypes(include = ["object", "string", "category"]).columns.tolist()
-print (f"Categorical predictors: {categorical_columns}\n\n")
+def prepare_features(train_raw, other_raw):
 
-# categories --> binary columns
-x_train_encoded = pd.get_dummies(
-    x_train_raw,
-    columns = categorical_columns,
-    drop_first = True,
-    dtype = float
-)
+    train_data = train_raw.copy()
+    other_data = other_raw.copy()
 
-x_test_encoded = pd.get_dummies(
-    x_test_raw,
-    columns = categorical_columns,
-    drop_first = True,
-    dtype = float
-)
+    categorical_columns = train_data.select_dtypes(
+        include = ["object", "string", "category"]
+    ).columns.tolist()
 
-# align test col. & training col.
-x_test_encoded = x_test_encoded.reindex(
-    columns = x_train_encoded.columns,
-    fill_value = 0
-)
+    numerical_columns = train_data.select_dtypes(
+        include = np.number
+    ).columns.tolist()
 
+    for column in categorical_columns:
 
-print (f"Encoded training shape: {x_train_encoded.shape}")
-print (f"Encoded testing shape: {x_test_encoded.shape}")
-print (f"\n Enconded feature names: {x_train_encoded.columns.tolist()}\n\n")
+        categories = train_data[column].dropna().unique().tolist()
 
+        train_data[column] = pd.Categorical(
+            train_data[column],
+            categories=categories
+        )
 
+        other_data[column] = pd.Categorical(
+            other_data[column],
+            categories=categories
+        )
 
-# 2.4 - DATA PREPARATION FOR LR
-# --------------------------------------------------------------------------
+    train_encoded = pd.get_dummies(
+        train_data,
+        columns = categorical_columns,
+        drop_first = True,
+        dtype=float
+    )
 
-x_train_lr = x_train_encoded.copy()
-x_test_lr = x_test_encoded.copy()
+    other_encoded = pd.get_dummies(
+        other_data,
+        columns = categorical_columns,
+        drop_first = True,
+        dtype=float
+    )
 
-numerical_columns = x_train_raw.select_dtypes(
-    include = np.number
-).columns.tolist()
+    other_encoded = other_encoded.reindex(
+        columns = train_encoded.columns,
+        fill_value = 0
+    )
 
-train_means = x_train_lr[numerical_columns].mean()
-train_stds = x_train_lr[numerical_columns].std(ddof=0)
+    train_lr = train_encoded.copy()
+    other_lr = other_encoded.copy()
 
-# checking zero-variance
-zero_variance_columns = train_stds[
-    train_stds == 0
-].index.tolist()
+    train_means = train_lr[numerical_columns].mean()
+    train_stds = train_lr[numerical_columns].std(ddof=0)
 
-print (f"Numerical columns to scale: {numerical_columns}")
-print (f"Zero-variance columns: {zero_variance_columns}")
+    train_stds = train_stds.replace(0, 1)
 
+    train_lr[numerical_columns] = (
+        train_lr[numerical_columns] - train_means
+    ) / train_stds
 
-# if std =0, std --> =1
-train_stds = train_stds.replace(0,1)
+    other_lr[numerical_columns] = (
+        other_lr[numerical_columns] - train_means
+    ) / train_stds
 
-
-x_train_lr[numerical_columns] = (
-    x_train_lr[numerical_columns] - train_means
-) / train_stds
-
-x_test_lr[numerical_columns] = (
-    x_test_lr[numerical_columns] - train_means
-) / train_stds
-
-
-
-print(f"\nScaled training data preview: {x_train_lr.head()}")
-
-
+    return train_encoded, other_encoded, train_lr, other_lr
 
 
 # 3- MODELS
 # --------------------------------------------------------------------------
 
 
-
 # 3.1- Linear Regression
 # --------------------------------------------------------------------------
-
-
-
-
-# -> numpy arrays
-x_train_array = x_train_lr.to_numpy(dtype=float)
-x_test_array = x_test_lr.to_numpy(dtype=float)
-
-weights = np.zeros(x_train_array.shape[1] + 1)
-
 
 def calc_preds(x_data, coefficients):
 
@@ -688,119 +670,40 @@ def calc_grads(x_data, errors):
     return gradients
 
 
-# training params
-learning_rate = 0.01
-iterations = 10000
+def fit_lr(x_data, y_values, learning_rate, iterations):
 
-print (f"Learning rate: {learning_rate}")
-print (f"Number of iterations: {iterations}")
+    weights = np.zeros(x_data.shape[1] + 1)
 
+    for iteration in range(iterations):
 
+        predictions = calc_preds(
+            x_data,
+            weights
+        )
 
-initial_predictions = calc_preds(
-    x_train_array,
-    weights
-)
+        errors = predictions - y_values
 
-initial_mse = np.mean(
-    (initial_predictions - y_train) ** 2
-)
+        gradients = calc_grads(
+            x_data,
+            errors
+        )
 
-print (f"\nInitial training MSE: {initial_mse}")
+        weights -= learning_rate * gradients
 
-
-for iteration in range(iterations):
-
-    predictions = calc_preds(
-        x_train_array,
-        weights
-    )
-
-    errors = predictions - y_train
-
-    gradients = calc_grads(
-        x_train_array,
-        errors
-    )
-
-    weights -= learning_rate * gradients
-
-
-# train
-y_train_pred_lr = calc_preds(
-    x_train_array,
-    weights
-)
-
-# pred
-y_pred_lr = calc_preds(
-    x_test_array,
-    weights
-)
-
-# FINAL training error
-final_training_mse_lr = np.mean(
-    (y_train_pred_lr - y_train) ** 2
-)
-
-print("\n\nLinear Regression", "-"*10)
-print (f"Number of coefficients: {len(weights)}")
-print (f"Final training MSE: {final_training_mse_lr}")
-
-print("\nFirst test predictions:")
-print(y_pred_lr[:10])
-
-print("\nCorresponding actual values:")
-print(y_test[:10])
+    return weights
 
 
 # 3.2 - Random Forest Regressor
 # --------------------------------------------------------------------------
 
-
-rf_model = RandomForestRegressor(n_estimators=100)
-
-# train.
-rf_model.fit(
-    x_train_encoded,
-    y_train
-)
-
-# preds
-y_train_pred_rf = rf_model.predict(
-    x_train_encoded
-)
-y_pred_rf = rf_model.predict(
-    x_test_encoded
-)
-
-print("\n\nRandom Forest", "-"*10)
-
-print("\nFirst test predictions:")
-print(y_pred_rf[:10])
-
-print("\nCorresponding actual values:")
-print(y_test[:10])
-
-
-# 4 - Model evaluation
-# --------------------------------------------------------------------------
-
-
 def calc_metrics(y_true, y_pred):
 
     errors = y_true - y_pred
 
-    # mae
     mae = np.mean(np.abs(errors))
-
-    # mse
     mse = np.mean(errors ** 2)
-
-    # rmse
     rmse = np.sqrt(mse)
 
-    # R2
     total_error = np.sum(
         (y_true - np.mean(y_true)) ** 2
     )
@@ -815,104 +718,270 @@ def calc_metrics(y_true, y_pred):
     return [mae, mse, rmse, r2]
 
 
-# train
-lr_train_metrics = calc_metrics(
-    y_train,
-    y_train_pred_lr
-)
-rf_train_metrics = calc_metrics(
-    y_train,
-    y_train_pred_rf
+# 4 - Model evaluation
+# --------------------------------------------------------------------------
+
+iterations = 10000
+
+number_of_folds = 5
+
+fold_indices = np.array_split(
+    np.random.permutation(len(x_train_raw)),
+    number_of_folds
 )
 
-# twst
-lr_test_metrics = calc_metrics(
-    y_test,
-    y_pred_lr
-)
-rf_test_metrics = calc_metrics(
-    y_test,
-    y_pred_rf
-)
+lr_001_scores = []
+lr_01_scores = []
+rf_50_scores = []
+rf_100_scores = []
+
+for fold in range(number_of_folds):
+
+    validation_indices = fold_indices[fold]
+
+    training_indices = np.concatenate([
+        fold_indices[i]
+        for i in range(number_of_folds)
+        if i != fold
+    ])
+
+    fold_x_train_raw = x_train_raw.iloc[training_indices].copy()
+    fold_x_valid_raw = x_train_raw.iloc[validation_indices].copy()
+
+    fold_y_train = y_train[training_indices]
+    fold_y_valid = y_train[validation_indices]
+
+    (
+        fold_x_train_encoded,
+        fold_x_valid_encoded,
+        fold_x_train_lr,
+        fold_x_valid_lr
+    ) = prepare_features(
+        fold_x_train_raw,
+        fold_x_valid_raw
+    )
+
+    fold_x_train_array = fold_x_train_lr.to_numpy(dtype=float)
+    fold_x_valid_array = fold_x_valid_lr.to_numpy(dtype=float)
+
+    weights = fit_lr(
+        fold_x_train_array,
+        fold_y_train,
+        0.001,
+        iterations
+    )
+
+    predictions = calc_preds(
+        fold_x_valid_array,
+        weights
+    )
+
+    lr_001_scores.append(
+        calc_metrics(fold_y_valid, predictions)
+    )
+
+    weights = fit_lr(
+        fold_x_train_array,
+        fold_y_train,
+        0.01,
+        iterations
+    )
+
+    predictions = calc_preds(
+        fold_x_valid_array,
+        weights
+    )
+
+    lr_01_scores.append(
+        calc_metrics(fold_y_valid, predictions)
+    )
+
+    rf_model = RandomForestRegressor(
+        n_estimators=50
+    )
+
+    rf_model.fit(
+        fold_x_train_encoded,
+        fold_y_train
+    )
+
+    predictions = rf_model.predict(
+        fold_x_valid_encoded
+    )
+
+    rf_50_scores.append(
+        calc_metrics(fold_y_valid, predictions)
+    )
+
+    rf_model = RandomForestRegressor(
+        n_estimators=100
+    )
+
+    rf_model.fit(
+        fold_x_train_encoded,
+        fold_y_train
+    )
+
+    predictions = rf_model.predict(
+        fold_x_valid_encoded
+    )
+
+    rf_100_scores.append(
+        calc_metrics(fold_y_valid, predictions)
+    )
 
 
-# results
 metric_names = ["MAE", "MSE", "RMSE", "R2"]
 
-train_results = pd.DataFrame(
+cv_results = pd.DataFrame(
     [
-        lr_train_metrics,
-        rf_train_metrics
+        np.mean(lr_001_scores, axis=0),
+        np.mean(lr_01_scores, axis=0),
+        np.mean(rf_50_scores, axis=0),
+        np.mean(rf_100_scores, axis=0)
     ],
     columns=metric_names,
     index=[
-        "Linear Regression",
-        "Random Forest"
+        "Linear Regression (rate=0.001)",
+        "Linear Regression (rate=0.01)",
+        "Random Forest (trees=50)",
+        "Random Forest (trees=100)"
     ]
 )
 
-print("TRAINING RESULTS")
-print(train_results.round(4))
+print("5-FOLD CROSS-VALIDATION RESULTS")
+print(cv_results.round(4))
+
+best_configuration = cv_results["RMSE"].idxmin()
+
+print("\nSelected configuration:")
+print(best_configuration)
 
 
-# Display
-test_results = pd.DataFrame(
-    [
-        lr_test_metrics,
-        rf_test_metrics
-    ],
-    columns=metric_names,
-    index=[
-        "Linear Regression",
-        "Random Forest"
-    ]
-)
+if best_configuration == "Linear Regression (rate=0.001)":
 
-print("\nTEST RESULTS")
-print(test_results.round(4))
+    selected_model = "Linear Regression"
+    learning_rate = 0.001
 
+elif best_configuration == "Linear Regression (rate=0.01)":
 
-# Compare both models using test RMSE.
-if lr_test_metrics[2] < rf_test_metrics[2]:
-    print("\nLower test RMSE: Linear Regression")
-elif rf_test_metrics[2] < lr_test_metrics[2]:
-    print("\nLower test RMSE: Random Forest")
+    selected_model = "Linear Regression"
+    learning_rate = 0.01
+
+elif best_configuration == "Random Forest (trees=50)":
+
+    selected_model = "Random Forest"
+    best_trees = 50
+
 else:
-    print("\nBoth models have the same test RMSE.")
+
+    selected_model = "Random Forest"
+    best_trees = 100
 
 
+print("\nSelected model:", selected_model)
 
-# 5 - Actual values vs predictions
+
+# 5 - Final model training and testing
+# --------------------------------------------------------------------------
+
+x_train_encoded, x_test_encoded, x_train_lr, x_test_lr = prepare_features(
+    x_train_raw,
+    x_test_raw
+)
+
+if selected_model == "Linear Regression":
+
+    x_train_array = x_train_lr.to_numpy(dtype=float)
+    x_test_array = x_test_lr.to_numpy(dtype=float)
+
+    weights = fit_lr(
+        x_train_array,
+        y_train,
+        learning_rate,
+        iterations
+    )
+
+    y_train_pred_final = calc_preds(
+        x_train_array,
+        weights
+    )
+
+    y_pred_final = calc_preds(
+        x_test_array,
+        weights
+    )
+
+else:
+
+    rf_model = RandomForestRegressor(
+        n_estimators=best_trees
+    )
+
+    rf_model.fit(
+        x_train_encoded,
+        y_train
+    )
+
+    y_train_pred_final = rf_model.predict(
+        x_train_encoded
+    )
+
+    y_pred_final = rf_model.predict(
+        x_test_encoded
+    )
+
+
+train_metrics_final = calc_metrics(
+    y_train,
+    y_train_pred_final
+)
+
+test_metrics_final = calc_metrics(
+    y_test,
+    y_pred_final
+)
+
+final_results = pd.DataFrame(
+    [
+        train_metrics_final,
+        test_metrics_final
+    ],
+    columns=metric_names,
+    index=["Training", "Test"]
+)
+
+print("\nFINAL MODEL RESULTS")
+print(final_results.round(4))
+
+print("\nFirst test predictions:")
+print(y_pred_final[:10])
+
+print("\nCorresponding actual values:")
+print(y_test[:10])
+
+
+# 6 - Actual values vs predictions
 # --------------------------------------------------------------------------
 
 minimum = min(
     y_test.min(),
-    y_pred_lr.min(),
-    y_pred_rf.min()
+    y_pred_final.min()
 )
 
 maximum = max(
     y_test.max(),
-    y_pred_lr.max(),
-    y_pred_rf.max()
+    y_pred_final.max()
 )
 
 plt.figure(figsize=(8, 6))
 
 plt.scatter(
     y_test,
-    y_pred_lr,
-    label="Linear Regression"
+    y_pred_final,
+    label=selected_model
 )
 
-plt.scatter(
-    y_test,
-    y_pred_rf,
-    label="Random Forest",
-    marker="x"
-)
-
-# Reference line for perfect predictions.
 plt.plot(
     [minimum, maximum],
     [minimum, maximum],
@@ -929,40 +998,36 @@ plt.tight_layout()
 plt.show()
 
 
-
-
-# 6 - Random Forest Feature Importance
+# 7 - Random Forest Feature Importance
 # --------------------------------------------------------------------------
 
-feature_importance = pd.Series(
-    rf_model.feature_importances_,
-    index=x_train_encoded.columns
-)
+if selected_model == "Random Forest":
 
-# Sort features by importance.
-feature_importance = feature_importance.sort_values()
+    feature_importance = pd.Series(
+        rf_model.feature_importances_,
+        index=x_train_encoded.columns
+    )
 
-# Display the ten most important features.
-top_features = feature_importance.tail(10)
+    feature_importance = feature_importance.sort_values()
 
-print("Top 10 features:")
-print(top_features.sort_values(ascending=False).round(4))
+    top_features = feature_importance.tail(10)
 
-# Convert the feature importance values to a numerical array.
-feature_values = top_features.to_numpy(dtype=float)
-feature_names = top_features.index.tolist()
+    print("Top 10 features:")
+    print(top_features.sort_values(ascending=False).round(4))
 
-# Plot feature importance.
-plt.figure(figsize=(9, 6))
+    feature_values = top_features.to_numpy(dtype=float)
+    feature_names = top_features.index.tolist()
 
-plt.barh(
-    feature_names,
-    feature_values
-)
+    plt.figure(figsize=(9, 6))
 
-plt.title("Random Forest Feature Importance")
-plt.xlabel("Importance")
-plt.ylabel("Feature")
+    plt.barh(
+        feature_names,
+        feature_values
+    )
 
-plt.tight_layout()
-plt.show()
+    plt.title("Random Forest Feature Importance")
+    plt.xlabel("Importance")
+    plt.ylabel("Feature")
+
+    plt.tight_layout()
+    plt.show()
