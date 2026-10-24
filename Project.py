@@ -852,11 +852,29 @@ cv_results = pd.DataFrame(
 print("5-FOLD CROSS-VALIDATION RESULTS")
 print(cv_results.round(4))
 
+plt.figure(figsize=(9, 5))
+
+plt.bar(
+    cv_results.index,
+    cv_results["RMSE"]
+)
+
+plt.title("5-Fold Cross-Validation: Model Comparison")
+plt.xlabel("Model Configuration")
+plt.ylabel("Mean Validation RMSE")
+
+plt.xticks(rotation=20, ha="right")
+plt.tight_layout()
+plt.show()
+
 best_configuration = cv_results["RMSE"].idxmin()
 
 print("\nSelected configuration:")
 print(best_configuration)
 
+learning_rate = 0.01
+best_trees = 100
+rf_model = RandomForestRegressor(n_estimators=best_trees)
 
 if best_configuration == "Linear Regression (rate=0.001)":
 
